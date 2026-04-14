@@ -39,6 +39,17 @@ const WarehouseSchema = new mongoose.Schema(
     company: { type: String, required: true }, 
     phoneNo: { type: String },
     mobileNo: { type: String },
+	 location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point'
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: false
+      }
+    },
     addressLine1: { type: String, required: true },
     addressLine2: { type: String },
     city: { type: String, required: true },

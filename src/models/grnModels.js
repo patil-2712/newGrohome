@@ -56,11 +56,12 @@ const GRNSchema = new mongoose.Schema({
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User"}, 
   // ✅ RECOMMENDED: ensure every GRN is linked to a Purchase Order
-  purchaseOrderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'PurchaseOrder',
-   // ✅ RECOMMENDED: ensure every GRN is linked to a PO
-  },
+ purchaseOrderId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'PurchaseOrder',
+  default: null,
+  set: (v) => (v === "" || v === "null" ? null : v)
+},
   supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier' },
   supplierCode: { type: String },
   supplierName: { type: String },

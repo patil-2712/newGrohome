@@ -1,12 +1,14 @@
 "use client";
-
+import { HiOutlinePhone } from "react-icons/hi";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   HiUsers, HiGlobeAlt, HiFlag, HiUserGroup, HiOutlineCube, HiOutlineLibrary,
   HiCurrencyDollar, HiOutlineCreditCard, HiChartSquareBar, HiReceiptTax,
   HiPuzzle, HiViewGrid, HiUser, HiDocumentText, HiOutlineOfficeBuilding,
-  HiCube, HiShoppingCart, HiCog, HiMenu, HiX, HiHome, HiBell,
+  HiCube, HiShoppingCart, HiCog, HiMenu, HiX, HiHome, HiBell,HiPhotograph,HiPhone,HiDocumentReport,HiVideoCamera 
+
+
 } from "react-icons/hi";
 import { GiStockpiles } from "react-icons/gi";
 import { SiCivicrm } from "react-icons/si";
@@ -263,6 +265,18 @@ const MODULE_ROUTE_MAP = {
     { label: "Tasks",              path: "/admin/tasks",                       needsView: true },
     { label: "Tasks Board",        path: "/admin/tasks/board",                 needsView: true },
   ],
+
+  "E-commerce":[
+	{label:"BannerManager",       path: "/admin/e-commerce/BannerManager",  needsView: true},
+	{label:"ContactManager",       path: "/admin/e-commerce/ContactManager",  needsView: true},
+	
+	{label:"MiddelImageManager",       path: "/admin/e-commerce/LeftImageManager",  needsView: true},
+	{label:"RefundPolicyManager",       path: "/admin/e-commerce/RefundPolicyManager",  needsView: true},
+	{label:"TermsConditionsManager",       path: "/admin/e-commerce/TermsConditionsManager",  needsView: true},
+	{label:"VideoManager",       path: "/admin/e-commerce/VideoManager",  needsView: true},
+	{label:"TestimonialManager",       path: "/admin/e-commerce/TestimonialManager",  needsView: true},
+	
+  ],
 };
 
 // ✅ FIX 5: canAccessModule — removed p.read (not in PERMISSIONS array)
@@ -516,6 +530,73 @@ export default function Layout({ children }) {
                 <Item href="/admin/helpdesk/feedback/analytics" icon={<HiChartSquareBar />} label="Feedback Analysis" onClick={closeSidebar} isActive={isActive("/admin/helpdesk/feedback/analytics")} />
                 <Item href="/admin/helpdesk/report"             icon={<HiChartSquareBar />} label="Report"            onClick={closeSidebar} isActive={isActive("/admin/helpdesk/report")} />
               </Section>
+
+			  {/* e-commerce */}
+			<Section
+  title="E-commerce"
+  icon={<HiShoppingCart />} // you can change icon
+  isOpen={openMenu === "ecommerce"}
+  onToggle={() => toggleMenu("ecommerce")}
+>
+  <Item
+    href="/admin/e-commerce/BannerManager"
+    icon={<HiPhotograph />}
+    label="Banner Manager"
+    onClick={closeSidebar}
+    isActive={isActive("/admin/e-commerce/BannerManager")}
+  />
+
+  <Item
+    href="/admin/e-commerce/ContactManager"
+    icon={<HiPhone />}
+    label="Contact Manager"
+    onClick={closeSidebar}
+    isActive={isActive("/admin/e-commerce/ContactManager")}
+  />
+
+ 
+
+  <Item
+    href="/admin/e-commerce/LeftImageManager"
+    icon={<HiViewGrid />}
+    label="Middle Image Manager"
+    onClick={closeSidebar}
+    isActive={isActive("/admin/e-commerce/LeftImageManager")}
+  />
+
+  <Item
+    href="/admin/e-commerce/RefundPolicyManager"
+    icon={<HiDocumentText />}
+    label="Refund Policy"
+    onClick={closeSidebar}
+    isActive={isActive("/admin/e-commerce/RefundPolicyManager")}
+  />
+
+  <Item
+    href="/admin/e-commerce/TermsConditionsManager"
+    icon={<HiDocumentReport />}
+    label="Terms & Conditions"
+    onClick={closeSidebar}
+    isActive={isActive("/admin/e-commerce/TermsConditionsManager")}
+  />
+
+  <Item
+    href="/admin/e-commerce/VideoManager"
+    icon={<HiVideoCamera />}
+    label="Video Manager"
+    onClick={closeSidebar}
+    isActive={isActive("/admin/e-commerce/VideoManager")}
+  />
+
+<Item
+    href="/admin/e-commerce/TestimonialManager"
+    icon={<HiVideoCamera />}
+    label="Testimonial Manager"
+    onClick={closeSidebar}
+    isActive={isActive("/admin/e-commerce/TestimonialManager")}
+  />
+
+</Section>
             </>
           )}
 

@@ -73,7 +73,7 @@ async function deleteFilesByPublicIds(publicIds) {
   }
 }
 
-async function processGrnItem(item, grnId, decodedToken, session, fromPO) {
+async function processGrnItem(item, grnId, decodedToken, fromPO) {
   const qty = Number(item.quantity);
   const itemId = item.item?._id || item.item;
   const warehouseId = item.warehouse?._id || item.warehouse;
@@ -87,7 +87,7 @@ async function processGrnItem(item, grnId, decodedToken, session, fromPO) {
   let inventoryDoc = await Inventory.findOne({
     item: new Types.ObjectId(itemId), warehouse: new Types.ObjectId(warehouseId),
     bin: binId ? new Types.ObjectId(binId) : { $in: [null, undefined] }, companyId: decodedToken.companyId,
-  }).session(session);
+  });
 
   if (!inventoryDoc) {
     inventoryDoc = new Inventory({
@@ -113,22 +113,23 @@ async function processGrnItem(item, grnId, decodedToken, session, fromPO) {
         if (batchBinId) inventoryDoc.batches[batchIndex].bin = new Types.ObjectId(batchBinId);
       }
       inventoryDoc.quantity += batchQty;
-      await StockMovement.create([{ item: new Types.ObjectId(itemId), warehouse: new Types.ObjectId(warehouseId), bin: batchBinId ? new Types.ObjectId(batchBinId) : null, movementType: "IN", quantity: batchQty, reference: grnId, referenceType: "GRN", remarks: `Stock received via GRN - Batch ${receivedBatch.batchNumber}`, companyId: decodedToken.companyId, createdBy: decodedToken.userId }], { session });
+      await StockMovement.create([{ item: new Types.ObjectId(itemId), warehouse: new Types.ObjectId(warehouseId), bin: batchBinId ? new Types.ObjectId(batchBinId) : null, movementType: "IN", quantity: batchQty, reference: grnId, referenceType: "GRN", remarks: `Stock received via GRN - Batch ${receivedBatch.batchNumber}`, companyId: decodedToken.companyId, createdBy: decodedToken.userId }], );
     }
   } else {
     inventoryDoc.quantity += qty;
-    await StockMovement.create([{ item: new Types.ObjectId(itemId), warehouse: new Types.ObjectId(warehouseId), bin: binId ? new Types.ObjectId(binId) : null, movementType: "IN", quantity: qty, reference: grnId, referenceType: "GRN", remarks: "Stock received via GRN", companyId: decodedToken.companyId, createdBy: decodedToken.userId }], { session });
+    await StockMovement.create([{ item: new Types.ObjectId(itemId), warehouse: new Types.ObjectId(warehouseId), bin: binId ? new Types.ObjectId(binId) : null, movementType: "IN", quantity: qty, reference: grnId, referenceType: "GRN", remarks: "Stock received via GRN", companyId: decodedToken.companyId, createdBy: decodedToken.userId }], );
   }
 
-  await inventoryDoc.save({ session });
+  await inventoryDoc.save();
   console.log(`Processed GRN item: ${item.itemCode || itemId}, qty: ${qty}`);
 }
 
 // ─── POST ─────────────────────────────────────────────────────
+// ─── POST ─────────────────────────────────────────────────────
 export async function POST(req) {
   await dbConnect();
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  // REMOVE: const session = await mongoose.startSession();
+  // REMOVE: session.startTransaction();
 
   try {
     const token = getTokenFromHeader(req);
@@ -163,30 +164,29 @@ export async function POST(req) {
     const financialYear = `${fyStart}-${String(fyEnd).slice(-2)}`;
     const key = "PurchaseGrn";
 
-    let counter = await Counter.findOne({ id: key, companyId }).session(session);
+    // REMOVE .session(session) from these queries
+    let counter = await Counter.findOne({ id: key, companyId });
     if (!counter) {
-      const [created] = await Counter.create([{ id: key, companyId, seq: 1 }], { session });
-      counter = created;
+      const created = await Counter.create([{ id: key, companyId, seq: 1 }]);
+      counter = created[0];
     } else {
       counter.seq += 1;
-      await counter.save({ session });
+      await counter.save();
     }
 
     grnData.documentNumberGrn = `PURCH-GRN/${financialYear}/${String(counter.seq).padStart(5, "0")}`;
 
-    const [grn] = await GRN.create([grnData], { session });
+    const [grn] = await GRN.create([grnData]);
     const fromPO = !!grnData.purchaseOrderId;
 
     for (const item of grnData.items) {
-      await processGrnItem(item, grn._id, decoded, session, fromPO);
+      await processGrnItem(item, grn._id, decoded, fromPO); // Remove session parameter
     }
 
-    await session.commitTransaction();
-    session.endSession();
+    // REMOVE: await session.commitTransaction();
+    // REMOVE: session.endSession();
 
-    // ✅ AUTO ACCOUNTING ENTRY — commitTransaction ke BAAD
-    // GRN → Inventory Dr ↑ (Asset), Accounts Payable Cr ↑ (Liability)
-    // Matlab: maal aa gaya (stock badha), supplier ko dena hai (liability badhi)
+    // ✅ AUTO ACCOUNTING ENTRY
     try {
       const totalAmount = grnData.grandTotal
         || grnData.totalAmount
@@ -201,22 +201,16 @@ export async function POST(req) {
           partyId:         grnData.supplier || grnData.supplierId || null,
           partyName:       grnData.supplierName || grnData.supplier?.name || "Supplier",
           referenceId:     grn._id,
-          referenceNumber: grn.documentNumberGrn,   // ✅ tumhara GRN number field
+          referenceNumber: grn.documentNumberGrn,
           narration:       `GRN ${grn.documentNumberGrn} — Stock received`,
           date:            grnData.grnDate || new Date(),
           createdBy:       decoded.id || decoded.userId,
         });
       } else {
-        // Amount 0 hai toh accounting entry skip karo (draft GRN ho sakta hai)
         console.log(`⚠️ GRN ${grn.documentNumberGrn} — amount is 0, skipping accounting entry`);
       }
     } catch (accountingErr) {
-      // ✅ Accounting fail hone se GRN fail NAHI hoga
-      // GRN aur stock already commit ho chuke hain
-      console.error(
-        `⚠️ Accounting entry failed for GRN ${grn.documentNumberGrn}:`,
-        accountingErr.message
-      );
+      console.error(`⚠️ Accounting entry failed for GRN ${grn.documentNumberGrn}:`, accountingErr.message);
     }
 
     return NextResponse.json(
@@ -224,8 +218,8 @@ export async function POST(req) {
       { status: 201 }
     );
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    // REMOVE: await session.abortTransaction();
+    // REMOVE: session.endSession();
     console.error("POST /api/grn error:", error.stack || error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to process GRN due to an internal server error." },
@@ -233,7 +227,6 @@ export async function POST(req) {
     );
   }
 }
-
 // ─── PUT ──────────────────────────────────────────────────────
 // No accounting change — PUT sirf GRN fields update karta hai
 export async function PUT(req) {

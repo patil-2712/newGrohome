@@ -1,42 +1,20 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Warehouse from "@/models/warehouseModels";
-import Country from "@/app/api/countries/schema";
-import State from "@/app/api/states/schema";
 import { getTokenFromHeader, verifyJWT } from "@/lib/auth";
 
-// ✅ Role-based Access Check
+// Role-based Access Check
 function isAuthorized(user) {
   if (!user) return false;
-
   if (user.type === "company") return true;
-
-  const allowedRoles = [
-    "admin",
-    "sales manager",
-    "purchase manager",
-    "inventory manager",
-    "accounts manager",
-    "hr manager",
-    "support executive",
-    "production head",
-    "project manager",
-  ];
-
-  const userRoles = Array.isArray(user.roles)
-    ? user.roles
-    : [];
-
-  return userRoles.some(role =>
-    allowedRoles.includes(role.trim().toLowerCase())
-  );
+  const allowedRoles = ["admin", "sales manager", "purchase manager", "inventory manager", "accounts manager", "hr manager", "support executive", "production head", "project manager"];
+  const userRoles = Array.isArray(user.roles) ? user.roles : [];
+  return userRoles.some(role => allowedRoles.includes(role.trim().toLowerCase()));
 }
 
-// ✅ Validate Token & Permissions
 async function validateUser(req) {
   const token = getTokenFromHeader(req);
   if (!token) return { error: "Token missing", status: 401 };
-
   try {
     const user = await verifyJWT(token);
     if (!user || !isAuthorized(user)) return { error: "Unauthorized", status: 403 };
@@ -47,31 +25,58 @@ async function validateUser(req) {
   }
 }
 
-/* ========================================
-   📥 GET /api/warehouses
-======================================== */
+// GET /api/warehouse
 export async function GET(req) {
   await dbConnect();
   const { user, error, status } = await validateUser(req);
   if (error) return NextResponse.json({ success: false, message: error }, { status });
   
   try {
-  const warehouses = await Warehouse.find({ companyId: user.companyId })
-  .sort({ createdAt: -1 })
-  .populate("country", "name") // Only fetch the 'name' field from Country
-  .populate("state", "name");  // Only fetch the 'name' field from State
-
-return NextResponse.json({ success: true, data: warehouses }, { status: 200 });
-
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    
+    console.log("GET request - ID:", id);
+    
+    if (id) {
+      const warehouse = await Warehouse.findOne({ 
+        _id: id, 
+        companyId: user.companyId 
+      });
+      
+      if (!warehouse) {
+        return NextResponse.json({ success: false, message: "Warehouse not found" }, { status: 404 });
+      }
+      
+      const whObj = warehouse.toObject();
+      if (whObj.location && whObj.location.coordinates && whObj.location.coordinates.length > 0) {
+        whObj.longitude = whObj.location.coordinates[0];
+        whObj.latitude = whObj.location.coordinates[1];
+      }
+      
+      return NextResponse.json({ success: true, data: whObj }, { status: 200 });
+    }
+    
+    const warehouses = await Warehouse.find({ companyId: user.companyId })
+      .sort({ createdAt: -1 });
+    
+    const formattedWarehouses = warehouses.map(wh => {
+      const whObj = wh.toObject();
+      if (whObj.location && whObj.location.coordinates && whObj.location.coordinates.length > 0) {
+        whObj.longitude = whObj.location.coordinates[0];
+        whObj.latitude = whObj.location.coordinates[1];
+      }
+      return whObj;
+    });
+    
+    return NextResponse.json({ success: true, data: formattedWarehouses }, { status: 200 });
+    
   } catch (err) {
-    console.error("GET /warehouses error:", err);
+    console.error("GET /warehouse error:", err);
     return NextResponse.json({ success: false, message: "Failed to fetch warehouses" }, { status: 500 });
   }
 }
 
-/* ========================================
-   ✏️ POST /api/warehouses
-======================================== */
+// POST /api/warehouse
 export async function POST(req) {
   await dbConnect();
   const { user, error, status } = await validateUser(req);
@@ -80,33 +85,243 @@ export async function POST(req) {
   try {
     const data = await req.json();
 
-    // ✅ Validate Required Fields
-     if (!data.warehouseCode || !data.warehouseName || !data.country || !data.state) {
-    return new Response(
-      JSON.stringify({ success: false, message: "All required fields must be provided" }),
-      { status: 400 }
-    );
-  }
+    if (!data.warehouseCode || !data.warehouseName || !data.country || !data.state) {
+      return NextResponse.json({ success: false, message: "All required fields must be provided" }, { status: 400 });
+    }
 
-    // ✅ Check for duplicate warehouse code
-    const existingWarehouse = await Warehouse.findOne({ code: data.warehouseCode, companyId: user.companyId });
+    const existingWarehouse = await Warehouse.findOne({ warehouseCode: data.warehouseCode, companyId: user.companyId });
     if (existingWarehouse) {
       return NextResponse.json({ success: false, message: "Warehouse code already exists" }, { status: 400 });
     }
 
-    const newWarehouse = new Warehouse({
-      ...data,
-      companyId: user.companyId,
-      createdBy: user.id,
-    });
+    const { latitude, longitude } = data;
+    const warehouseData = { ...data, companyId: user.companyId, createdBy: user.id };
 
+    if (latitude && longitude) {
+      warehouseData.location = {
+        type: "Point",
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      };
+    }
+
+    delete warehouseData.latitude;
+    delete warehouseData.longitude;
+
+    const newWarehouse = new Warehouse(warehouseData);
     await newWarehouse.save();
-    return NextResponse.json({ success: true, data: newWarehouse }, { status: 201 });
+
+    const responseWarehouse = newWarehouse.toObject();
+    if (newWarehouse.location && newWarehouse.location.coordinates && newWarehouse.location.coordinates.length > 0) {
+      responseWarehouse.longitude = newWarehouse.location.coordinates[0];
+      responseWarehouse.latitude = newWarehouse.location.coordinates[1];
+    }
+
+    return NextResponse.json({ success: true, data: responseWarehouse }, { status: 201 });
   } catch (err) {
-    console.error("POST /warehouses error:", err);
+    console.error("POST /warehouse error:", err);
     return NextResponse.json({ success: false, message: "Failed to create warehouse" }, { status: 500 });
   }
 }
+
+// ✅ PUT /api/warehouse - Update warehouse
+export async function PUT(req) {
+  await dbConnect();
+  const { user, error, status } = await validateUser(req);
+  if (error) return NextResponse.json({ success: false, message: error }, { status });
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    
+    if (!id) {
+      return NextResponse.json({ success: false, message: "Warehouse ID required" }, { status: 400 });
+    }
+    
+    const data = await req.json();
+    const { latitude, longitude } = data;
+    
+    // Prepare update data
+    const updateData = { ...data };
+    
+    // Convert latitude/longitude to GeoJSON if provided
+    if (latitude && longitude) {
+      updateData.location = {
+        type: "Point",
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      };
+    }
+    
+    // Remove flat fields so they don't get saved directly
+    delete updateData.latitude;
+    delete updateData.longitude;
+    delete updateData._id;
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
+    delete updateData.__v;
+    
+    const updatedWarehouse = await Warehouse.findOneAndUpdate(
+      { _id: id, companyId: user.companyId },
+      updateData,
+      { new: true, runValidators: true }
+    );
+    
+    if (!updatedWarehouse) {
+      return NextResponse.json({ success: false, message: "Warehouse not found" }, { status: 404 });
+    }
+    
+    const responseWarehouse = updatedWarehouse.toObject();
+    if (updatedWarehouse.location && updatedWarehouse.location.coordinates && updatedWarehouse.location.coordinates.length > 0) {
+      responseWarehouse.longitude = updatedWarehouse.location.coordinates[0];
+      responseWarehouse.latitude = updatedWarehouse.location.coordinates[1];
+    }
+    
+    return NextResponse.json({ success: true, data: responseWarehouse }, { status: 200 });
+    
+  } catch (err) {
+    console.error("PUT /warehouse error:", err);
+    return NextResponse.json({ success: false, message: "Failed to update warehouse" }, { status: 500 });
+  }
+}
+
+// DELETE /api/warehouse
+export async function DELETE(req) {
+  await dbConnect();
+  const { user, error, status } = await validateUser(req);
+  if (error) return NextResponse.json({ success: false, message: error }, { status });
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    
+    if (!id) {
+      return NextResponse.json({ success: false, message: "Warehouse ID required" }, { status: 400 });
+    }
+    
+    const deletedWarehouse = await Warehouse.findOneAndDelete({ _id: id, companyId: user.companyId });
+    
+    if (!deletedWarehouse) {
+      return NextResponse.json({ success: false, message: "Warehouse not found" }, { status: 404 });
+    }
+    
+    return NextResponse.json({ success: true, message: "Warehouse deleted successfully" }, { status: 200 });
+    
+  } catch (err) {
+    console.error("DELETE /warehouse error:", err);
+    return NextResponse.json({ success: false, message: "Failed to delete warehouse" }, { status: 500 });
+  }
+}
+
+
+///////working old code////////////
+//import { NextResponse } from "next/server";
+//import dbConnect from "@/lib/db";
+//import Warehouse from "@/models/warehouseModels";
+//import Country from "@/app/api/countries/schema";
+//import State from "@/app/api/states/schema";
+//import { getTokenFromHeader, verifyJWT } from "@/lib/auth";
+//
+//// ✅ Role-based Access Check
+//function isAuthorized(user) {
+//  if (!user) return false;
+//
+//  if (user.type === "company") return true;
+//
+//  const allowedRoles = [
+//    "admin",
+//    "sales manager",
+//    "purchase manager",
+//    "inventory manager",
+//    "accounts manager",
+//    "hr manager",
+//    "support executive",
+//    "production head",
+//    "project manager",
+//  ];
+//
+//  const userRoles = Array.isArray(user.roles)
+//    ? user.roles
+//    : [];
+//
+//  return userRoles.some(role =>
+//    allowedRoles.includes(role.trim().toLowerCase())
+//  );
+//}
+//
+//// ✅ Validate Token & Permissions
+//async function validateUser(req) {
+//  const token = getTokenFromHeader(req);
+//  if (!token) return { error: "Token missing", status: 401 };
+//
+//  try {
+//    const user = await verifyJWT(token);
+//    if (!user || !isAuthorized(user)) return { error: "Unauthorized", status: 403 };
+//    return { user };
+//  } catch (err) {
+//    console.error("JWT Verification Failed:", err.message);
+//    return { error: "Invalid token", status: 401 };
+//  }
+//}
+//
+///* ========================================
+//   📥 GET /api/warehouses
+//======================================== */
+//export async function GET(req) {
+//  await dbConnect();
+//  const { user, error, status } = await validateUser(req);
+//  if (error) return NextResponse.json({ success: false, message: error }, { status });
+//  
+//  try {
+//  const warehouses = await Warehouse.find({ companyId: user.companyId })
+//  .sort({ createdAt: -1 })
+//  .populate("country", "name") // Only fetch the 'name' field from Country
+//  .populate("state", "name");  // Only fetch the 'name' field from State
+//
+//return NextResponse.json({ success: true, data: warehouses }, { status: 200 });
+//
+//  } catch (err) {
+//    console.error("GET /warehouses error:", err);
+//    return NextResponse.json({ success: false, message: "Failed to fetch warehouses" }, { status: 500 });
+//  }
+//}
+//
+///* ========================================
+//   ✏️ POST /api/warehouses
+//======================================== */
+//export async function POST(req) {
+//  await dbConnect();
+//  const { user, error, status } = await validateUser(req);
+//  if (error) return NextResponse.json({ success: false, message: error }, { status });
+//
+//  try {
+//    const data = await req.json();
+//
+//    // ✅ Validate Required Fields
+//     if (!data.warehouseCode || !data.warehouseName || !data.country || !data.state) {
+//    return new Response(
+//      JSON.stringify({ success: false, message: "All required fields must be provided" }),
+//      { status: 400 }
+//    );
+//  }
+//
+//    // ✅ Check for duplicate warehouse code
+//    const existingWarehouse = await Warehouse.findOne({ code: data.warehouseCode, companyId: user.companyId });
+//    if (existingWarehouse) {
+//      return NextResponse.json({ success: false, message: "Warehouse code already exists" }, { status: 400 });
+//    }
+//
+//    const newWarehouse = new Warehouse({
+//      ...data,
+//      companyId: user.companyId,
+//      createdBy: user.id,
+//    });
+//
+//    await newWarehouse.save();
+//    return NextResponse.json({ success: true, data: newWarehouse }, { status: 201 });
+//  } catch (err) {
+//    console.error("POST /warehouses error:", err);
+//    return NextResponse.json({ success: false, message: "Failed to create warehouse" }, { status: 500 });
+//  }
+//}
 
 
 

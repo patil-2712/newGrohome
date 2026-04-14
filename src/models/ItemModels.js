@@ -1,95 +1,217 @@
+
 import mongoose from "mongoose";
 
+// Quality Check Schema
 const QualityCheckSchema = new mongoose.Schema({
   srNo: { type: String },
   parameter: { type: String },
   min: { type: String },
   max: { type: String }
-});
+}, { _id: false });
 
+// POS Config Schema
 const POSConfigSchema = new mongoose.Schema(
   {
     barcode: { type: String, trim: true },
-    posPrice: { type: Number }, // optional override price for POS
+    posPrice: { type: Number },
     allowDiscount: { type: Boolean, default: true },
-    maxDiscountPercent: { type: Number, default: 100 }, // security
+    maxDiscountPercent: { type: Number, default: 100 },
     taxableInPOS: { type: Boolean, default: true },
-    showInPOS: { type: Boolean, default: true }, // fine control
+    showInPOS: { type: Boolean, default: true },
   },
   { _id: false }
 );
 
+// ✅ Variant Schema for item variants (e.g., 250gm, 500gm, 1kg)
+const VariantSchema = new mongoose.Schema(
+  {
+    id: { type: Number },
+    name: { type: String },        // e.g., "250gm", "500gm", "1kg"
+    quantity: { type: Number },    // quantity in the variant
+    price: { type: Number },       // price for this variant
+    discount: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+// Main Item Schema
 const ItemSchema = new mongoose.Schema(
   {
+    // Company Information
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "CompanyUser" },
-
+    
+    // Basic Information
+    imageUrl: { type: String },
     itemCode: { type: String, required: true },
     itemName: { type: String, required: true },
     description: { type: String },
-
     category: { type: String, required: true },
-    unitPrice: { type: Number, required: true },
-
+    
+    // Pricing & Stock
+    unitPrice: { type: Number, required:false  },
     quantity: { type: Number },
     reorderLevel: { type: Number },
     leadTime: { type: Number },
-
+    
+    // Item Classification
     itemType: { type: String },
-    uom: { type: String },
-
+    uom: { type: String }, // KG, MTP, PC, LTR, MTR
+    
+    // Inventory Management
     managedBy: { type: String },
     managedValue: { type: String },
-
+    
+    // Additional Details
     batchNumber: { type: String },
     expiryDate: { type: Date },
     manufacturer: { type: String },
-
+    
+    // Dimensions
     length: { type: Number },
     width: { type: Number },
     height: { type: Number },
     weight: { type: Number },
-
+    
+    // Flags
     gnr: { type: Boolean, default: false },
     delivery: { type: Boolean, default: false },
     productionProcess: { type: Boolean, default: false },
-
-    // ✅ POS Flag
+    
+    // POS Settings
     posEnabled: { type: Boolean, default: false },
     posConfig: { type: POSConfigSchema, default: {} },
-
+    
     // Quality Check
     qualityCheck: { type: Boolean, default: false },
     qualityCheckDetails: [QualityCheckSchema],
-
+    
     // Tax Details
     includeGST: { type: Boolean, default: true },
     includeIGST: { type: Boolean, default: false },
-
     gstCode: { type: String },
     gstName: { type: String },
-
     gstRate: { type: Number },
     cgstRate: { type: Number },
     sgstRate: { type: Number },
-
     igstCode: { type: String },
     igstName: { type: String },
     igstRate: { type: Number },
-
+    
+    // ✅ NEW: Variants (Units like 250gm, 500gm, 1kg)
+    enableVariants: { type: Boolean, default: false },
+    variants: [VariantSchema],
+    calculationType: { type: String, enum: ["linear", "logarithmic"], default: "linear" },
+    logBase: { type: Number, default: 10 },
+    
+    // Status
     status: { type: String, enum: ["active", "inactive"], default: "active" },
     active: { type: Boolean, default: true }
   },
   { timestamps: true }
 );
 
-// ✅ Useful indexes for POS search performance
+// ✅ Indexes for better performance
 ItemSchema.index({ companyId: 1, posEnabled: 1, active: 1 });
 ItemSchema.index({ companyId: 1, "posConfig.barcode": 1 });
+ItemSchema.index({ companyId: 1, itemCode: 1 });
+ItemSchema.index({ companyId: 1, category: 1 });
+ItemSchema.index({ companyId: 1, itemType: 1 });
+ItemSchema.index({ companyId: 1, enableVariants: 1 });
 
 export default mongoose.models.Item || mongoose.model("Item", ItemSchema);
+//import mongoose from "mongoose";
+//
+//const QualityCheckSchema = new mongoose.Schema({
+//  srNo: { type: String },
+//  parameter: { type: String },
+//  min: { type: String },
+//  max: { type: String }
+//});
+//
+//const POSConfigSchema = new mongoose.Schema(
+//  {
+//    barcode: { type: String, trim: true },
+//    posPrice: { type: Number }, // optional override price for POS
+//    allowDiscount: { type: Boolean, default: true },
+//    maxDiscountPercent: { type: Number, default: 100 }, // security
+//    taxableInPOS: { type: Boolean, default: true },
+//    showInPOS: { type: Boolean, default: true }, // fine control
+//  },
+//  { _id: false }
+//);
+//
+//const ItemSchema = new mongoose.Schema(
+//  {
+//    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
+//    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "CompanyUser" },
+//    imageUrl: { type: String },
+//    itemCode: { type: String, required: true },
+//    itemName: { type: String, required: true },
+//    description: { type: String },
+//
+//    category: { type: String, required: true },
+//    unitPrice: { type: Number, required: true },
+//
+//    quantity: { type: Number },
+//    reorderLevel: { type: Number },
+//    leadTime: { type: Number },
+//
+//    itemType: { type: String },
+//    uom: { type: String },
+//
+//    managedBy: { type: String },
+//    managedValue: { type: String },
+//
+//    batchNumber: { type: String },
+//    expiryDate: { type: Date },
+//    manufacturer: { type: String },
+//
+//    length: { type: Number },
+//    width: { type: Number },
+//    height: { type: Number },
+//    weight: { type: Number },
+//
+//    gnr: { type: Boolean, default: false },
+//    delivery: { type: Boolean, default: false },
+//    productionProcess: { type: Boolean, default: false },
+//
+//    // ✅ POS Flag
+//    posEnabled: { type: Boolean, default: false },
+//    posConfig: { type: POSConfigSchema, default: {} },
+//
+//    // Quality Check
+//    qualityCheck: { type: Boolean, default: false },
+//    qualityCheckDetails: [QualityCheckSchema],
+//
+//    // Tax Details
+//    includeGST: { type: Boolean, default: true },
+//    includeIGST: { type: Boolean, default: false },
+//
+//    gstCode: { type: String },
+//    gstName: { type: String },
+//
+//    gstRate: { type: Number },
+//    cgstRate: { type: Number },
+//    sgstRate: { type: Number },
+//
+//    igstCode: { type: String },
+//    igstName: { type: String },
+//    igstRate: { type: Number },
+//
+//    status: { type: String, enum: ["active", "inactive"], default: "active" },
+//    active: { type: Boolean, default: true }
+//  },
+//  { timestamps: true }
+//);
+//
+//// ✅ Useful indexes for POS search performance
+//ItemSchema.index({ companyId: 1, posEnabled: 1, active: 1 });
+//ItemSchema.index({ companyId: 1, "posConfig.barcode": 1 });
+//
+//export default mongoose.models.Item || mongoose.model("Item", ItemSchema);
 
-
+/////////////////////////////top code is working code//////////////
 // import mongoose from "mongoose";
 
 // const QualityCheckSchema = new mongoose.Schema({
@@ -148,4 +270,3 @@ export default mongoose.models.Item || mongoose.model("Item", ItemSchema);
 // );
 
 // export default mongoose.models.Item || mongoose.model("Item", ItemSchema);
-

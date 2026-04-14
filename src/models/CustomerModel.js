@@ -17,7 +17,7 @@ const addressSchema = new mongoose.Schema({
 }, { _id: false });
 
 const customerSchema = new mongoose.Schema({
-  companyId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
+  companyId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Company',  },
   createdBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'CompanyUser' },
  
 
@@ -46,7 +46,7 @@ lastAssignedAgentIndex: {
   customerType: {
     type: String,
     required: [true, "Customer type is required"],
-    enum: ['Individual', 'Business', 'Government'],
+    enum: ['Individual', 'Business', 'Government','E-commerce'],
     default: 'Individual'
   },
   emailId: {
@@ -95,7 +95,7 @@ contactEmails: [
   },
   pan: {
     type: String,
-    required: [true, "PAN is required"],
+   
     trim: true,
     uppercase: true,
     // match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format"]

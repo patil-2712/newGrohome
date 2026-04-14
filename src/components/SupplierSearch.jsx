@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import useSearch from "../hooks/useSearch";
 
 // Prop name ko 'onSelectCustomer' rakha hai taaki main page se match kare
-const SupplierSearch = ({ onSelectCustomer, initialSupplier }) => {
+const SupplierSearch = ({ onSelectSupplier, initialSupplier }) => {
   const wrapperRef = useRef(null);
 
   const [query, setQuery] = useState(initialSupplier?.supplierName || "");
@@ -68,17 +68,15 @@ const SupplierSearch = ({ onSelectCustomer, initialSupplier }) => {
   };
 
   // YE FUNCTION AUTO-FILL KE LIYE ZAROORI HAI
-  const handleSelect = (sup) => {
-    setSelected(sup);
-    setQuery(sup.supplierName || "");
-    setShowDropdown(false);
-    
-    // Parent component (Order Form) ko pura supplier object bhejein
-    // Taaki Name, Code aur Contact Person fill ho sake
-    if (onSelectCustomer) {
-      onSelectCustomer(sup); 
-    }
-  };
+ const handleSelect = (sup) => {
+  setSelected(sup);
+  setQuery(sup.supplierName || "");
+  setShowDropdown(false);
+  
+  if (onSelectSupplier) {
+    onSelectSupplier(sup); 
+  }
+};
 
   const handleClear = () => {
     setSelected(null);
